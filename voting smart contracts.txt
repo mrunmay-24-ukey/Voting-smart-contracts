@@ -1,0 +1,210 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >0.5.0 <= 0.9.0;
+
+contract VotingContract{
+
+    struct Voter{
+        string name;
+        uint age;
+        uint voterId;
+        string gender;
+        uint voteCandidateId;
+        address voterAddress;
+
+    }
+
+    struct Candidate{
+        string name;
+        string party;
+        uint age;
+        string gender;
+        uint candidateId;
+        address candidateAddress;
+        uint votes;
+    }
+
+    address electionCommission;
+    address public winner;
+
+    uint nextVoterId = 1;
+    uint nextCandidateId = 1;
+
+    uint startTime;
+    uint endTime;
+
+    mapping(uint => Voter) voterDetails;
+    mapping(uint => Candidate) candidateDetails;
+    bool stopVoting;
+
+    // contract ka control election commission ko dena hoga kyuki
+    // koi aur changes na kar paye isliye ownership dene ke liye constructor
+    // banayege
+
+    constructor(){
+        electionCommission = msg.sender;
+    }
+
+    // defining modifiers -- prerequisites for a function
+
+    modifier onlyCommission(){
+        require(msg.sender == electionCommission , "You are not from election Commission");
+        _;
+    }
+
+    modifier isVotingOver(){
+        require(endTime > block.timestamp && stopVoting != true , "Voting is over");
+        _;
+    }
+
+
+    // functions 
+
+    function candidateRegister(
+        string calldata _name,
+        string calldata _party,
+        uint _age,
+        string calldata _gender
+    ) external{
+        require(_age >= 18 , "Age is under 18");
+        require(candidateVerification(msg.sender) , "You have already registered");
+        require(nextCandidateId < 3 , "Candidate registration full"); 
+
+        candidateDetails[nextCandidateId] = Candidate({
+            name:_name,
+            party:_party,
+            age:_age,
+            gender:_gender,
+            candidateId:nextCandidateId,
+            candidateAddress:msg.sender,
+            votes:0
+        });
+        nextCandidateId++;
+    }
+
+
+    function candidateVerification(address _person) internal view returns(bool){
+        for(uint candidateID = 1; candidateID < nextCandidateId ; candidateID++){
+            if(candidateDetails[candidateID].candidateAddress == _person){
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+    function candidateList() public view returns(Candidate[] memory){
+        Candidate[] memory candidateArr = new Candidate[](nextCandidateId-1);
+
+        for(uint i = 0 ; i< nextCandidateId ; i++){
+            candidateArr[i-1] = candidateDetails[i];
+        }
+
+        return candidateArr;
+    }
+
+    function voterRegister(
+        string calldata _name,
+        uint _age,
+        string calldata _gender
+
+    ) external {
+        require(_age < 18 , "You are under 18");
+        require(voterVerification(msg.sender) , "Voter registerd successfully");
+
+        voterDetails[nextVoterId] = Voter({
+            name:_name,
+            age:_age,
+            gender:_gender,
+            voterId:nextVoterId,
+            voteCandidateId:nextCandidateId,
+            voterAddress: msg.sender
+        });
+        nextVoterId++;
+        
+    }
+
+
+    function voterVerification(address _person) internal view returns(bool){
+        for(uint i = 1 ; i< nextVoterId ; i++){
+            if(voterDetails[i].voterAddress == _person){
+                return false;
+            }
+        }
+        return true;
+    } 
+
+    function voterList() public view returns(Voter[] memory){
+        Voter[] memory voterArr = new Voter[](nextVoterId-1);
+
+        for(uint i = 0 ; i< nextVoterId ; i++){
+            voterArr[i-1] = voterDetails[i];
+        }
+
+        return voterArr;
+
+    }
+
+    function voteTime(uint _startTime , uint duration) external onlyCommission(){
+        startTime = _startTime;
+        endTime = _startTime + duration;
+    }
+
+
+    function votingStatus() public view returns(string memory){
+        if(startTime == 0){
+            return "Voting has not started yet";
+
+        }
+        else if(endTime > block.timestamp && stopVoting != true){
+            return "Voting in progress";
+        }
+        else{
+            return "Voting has ended";
+        }
+    }
+
+    
+
+
+    function emergency() public onlyCommission(){
+        stopVoting = true;
+    }
+
+    function result() public onlyCommission(){
+        uint max = 0 ;
+
+        for(uint i = 1 ; i< nextCandidateId ; i++){
+            if(candidateDetails[i].votes > max){
+                max = candidateDetails[i].votes;
+                winner = candidateDetails[i].candidateAddress;
+
+            }
+        }
+    }
+
+
+    function vote( uint _voterId , uint _candidateId) external isVotingOver(){
+        require(voterDetails[_voterId].voterAddress == msg.sender , "You have not registered");
+        // voting is allowed when voting has started
+        require(startTime != 0 , "Voting has not started");
+
+        // voting should only happen when two candidates have registered
+        require(nextCandidateId == 3 , "candidate has not registered");
+        require(_candidateId > 0 && _candidateId < 3 , "Candidate id is not valid");
+
+        // one voter - one vote
+        require(voterDetails[_voterId].voteCandidateId == 0, "Voter has already voted");
+        voterDetails[_voterId].voteCandidateId == _candidateId;
+        candidateDetails[_candidateId].votes++;
+
+        
+    }
+
+
+    
+
+
+    
+
+    
+}
